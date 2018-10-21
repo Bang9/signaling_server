@@ -1,13 +1,19 @@
-##Signaling server
+## Signaling server
 
-npm install 후
-node app.js로 서버 실행
+```
+npm install -g forever
+npm install
+forever start app.js
+```
 
-webRTC에서 signaling websocket url을 local url:port 로 변경
 
-##test files
+## Test files
+
 broadcaster.html -> broad caster client
+viewer.html      -> viewer client
 
-index.html -> viewer client
+#### *Client signaling socket url을 서버 url로 변경
+
+
 
 
