@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>client test : broadcaster</title>
+</head><script src="resources/socket.io.js"></script>
+<script>
+    var socket = io.connect("http://172.30.1.47:8080");
+    var sdpTypeNumToString = {
+        0:"offer",
+        1:"pranswer",
+        2:"answer"
+    };
+    var sdpTypeStringToNum = {
+        "offer":0,
+        "pranswer":1,
+        "answer":2
+    };
+    var connections = {};
+
+    socket.on('success',
+        function (data) {
+            console.log("연결 성공",data);
+            console.log("id",socket.id);
+
+            getUserMedia();
+
+            //내가 broad caster임을 서버에 알리고, 생성할 roomId를 전송
+            socket.emit('broadCasterConnected',{
+                roomId:"testRoom"
+            });
+        }
+    );
+
+    //get offer Sdp
+    socket.on('sendOfferSdp',function(data){
+        data.sdp = JSON.parse(data.sdp)
+        console.log("get offer sdp",data)
+        var remoteSdp = data.sdp;
+        remoteSdp.type = sdpTypeNumToString[remoteSdp.type]
+        var from = data.from;
+
+        //create new peer connection
+        createNewPeerConnection(from);
+        var curPeerConnection = connections[from];
+
+        //set media stream
+        curPeerConnection.addStream(window.stream);
+        // window.stream.getTracks().forEach((track)=>{
+        //     console.log("set media stream",curPeerConnection);
+        //     curPeerConnection.addTrack(track, window.stream)
+        // });
+
+        curPeerConnection.oniceconnectionstatechange = (e)=>onIceConnectionState(e,from);
+        //set on icecandidate
+        curPeerConnection.onicecandidate = (e)=>onCandidate(e,from);
+
+        //set remoteSdp
+        curPeerConnection.setRemoteDescription(remoteSdp).then(()=>{console.log('Remote SDP OK',remoteSdp);});
+
+        //create answer
+        curPeerConnection.createAnswer()
+            .then((answerSdp)=>{
+                //set localSdp
+                curPeerConnection.setLocalDescription(answerSdp).then(()=>{console.log('Local SDP OK',answerSdp);});
+
+                //send answerSdp
+                socket.emit('sendAnswerSdp',{
+                    to:from,
+                    from:socket.id,
+                    sdp:JSON.stringify({"sdp":answerSdp.sdp,"type":sdpTypeStringToNum[answerSdp.type]}),
+                });
+
+            });
+    });
+
+
+    //get candidate
+    socket.on('sendCandidate',function(data){
+        var curPeerConnection = connections[data.from];
+        var candidate = JSON.parse(data.candidate)
+        candidate.candidate = candidate.sdp
+        curPeerConnection.addIceCandidate(candidate);
+    });
+
+    function onIceConnectionState(e,from){
+        console.log("ice connection state changed : "+from+" : ",e);
+    }
+
+    function onCandidate(e,from){
+        console.log("candidate event emit",e);
+        if(e.candidate){
+            socket.emit('sendCandidate',{
+                from:socket.id,
+                to:from,
+                candidate:JSON.stringify({"sdp":e.candidate.candidate,"sdpMLineIndex":e.candidate.sdpMLineIndex,"sdpMid":e.candidate.sdpMid})
+            })
+        }
+    }
+
+    function createNewPeerConnection(from){
+        console.log("create new peer connection",connections);
+        var server = {'iceServers' : [{'url':'stun:stun.l.google.com:19302'}]};
+        connections[from] = new RTCPeerConnection(server);
+    }
+
+    function getUserMedia(){
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            const constraints = {
+                audio: true,
+                video: true
+            };
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then((stream)=>setMedia(stream))
+                .catch(function(err) {
+                    alert(err);
+                    console.log (err);
+                });
+        }
+        else {
+            alert("navigator.mediaDevices not supported");
+            console.log ("navigator.mediaDevices not supported")
+        }
+    }
+
+    function setMedia(stream){
+        alert("set media")
+        const video = document.querySelector('video');
+        const videoTracks = stream.getVideoTracks();
+        console.log(`Using video device: ${videoTracks[0].label}`);
+        window.stream = stream; // make variable available to browser console
+        video.srcObject = stream;
+        video.onloadedmetadata = function(e) {
+            video.play();
+        };
+    }
+</script>
+<body>
+
+<div>
+    <video autoplay playsinline style="width:500px;height:500px;"></video>
+</div>
+
+</body>
+</html>
