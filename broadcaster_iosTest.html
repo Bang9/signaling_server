@@ -105,7 +105,6 @@
     }
 
     function getUserMedia(){
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             const constraints = {
                 audio: true,
                 video: true
@@ -116,11 +115,6 @@
                     alert(err);
                     console.log (err);
                 });
-        }
-        else {
-            alert("navigator.mediaDevices not supported");
-            console.log ("navigator.mediaDevices not supported")
-        }
     }
 
     function setMedia(stream){
